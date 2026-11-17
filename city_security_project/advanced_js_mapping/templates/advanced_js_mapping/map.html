@@ -1,0 +1,121 @@
+{% extends "advanced_js_mapping/base.html" %}
+{% load static %}
+
+{% block title %}Interactive Map | Advanced JS Mapping{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-body">
+        <h2 class="h4">City editing</h2>
+        {% if not user.is_authenticated %}
+            <p>Sign in to search and request editing access.</p>
+            <a href="{% url 'login' %}?next={{ request.path|urlencode }}">Sign in</a>
+        {% else %}
+        {% if perms.advanced_js_mapping.add_advancedcity or perms.advanced_js_mapping.change_advancedcity %}
+        <form id="city-editor" data-create-url="{% url 'advanced_js_mapping:city_create' %}">
+            {% csrf_token %}
+            <label for="city-choice">Action</label>
+            <select id="city-choice" class="form-select mb-2">
+            {% if perms.advanced_js_mapping.add_advancedcity %}
+                <option value="">Create a city</option>
+                {% endif %}
+                {% if perms.advanced_js_mapping.change_advancedcity %}
+                {% for city in editable_cities %}
+                <option value="{{ city.pk }}"
+                        data-url="{% url 'advanced_js_mapping:city_update' city.pk %}"
+                        data-name="{{ city.name }}" data-country="{{ city.country }}"
+                        data-population="{{ city.population }}">{{ city.name }}, {{ city.country }}</option>
+                {% endfor %}
+                {% endif %}
+            </select>
+            <label for="city-name">Name</label>
+            <input id="city-name" class="form-control mb-2" maxlength="100" required>
+            <label for="city-country">Country</label>
+            <input id="city-country" class="form-control mb-2" maxlength="100" required>
+            <label for="city-population">Population</label>
+            <input id="city-population" class="form-control mb-2" type="number" min="0" step="1" required>
+            <div id="city-location">
+            <label for="city-latitude">Latitude</label>
+            <input id="city-latitude" class="form-control mb-2" type="number" min="-90" max="90" step="any">
+            <label for="city-longitude">Longitude</label>
+            <input id="city-longitude" class="form-control mb-2" type="number" min="-180" max="180" step="any">
+            </div>
+            <button id="city-save" class="btn btn-primary" type="submit">Save city</button>
+            <p id="city-message" class="mt-2" role="status" aria-live="polite"></p>
+        </form>
+        {% else %}
+        <p>You are signed in, but do not have permission to edit cities.</p>
+        {% endif %}
+        {% endif %}
+    </div>
+</div>
+
+<div class="row g-3">
+    <form hidden aria-hidden="true">{% csrf_token %}</form>
+    <div class="col-lg-8">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                    <div>
+                        <h1 class="h3 mb-1">Interactive map</h1>
+                        <p class="text-muted mb-0">{{ total_cities }} active cities. Draw a polygon or rectangle to search.</p>
+                    </div>
+                    <div>
+                        <button id="resetView" type="button" class="btn btn-outline-primary btn-sm">Reset view</button>
+                        <button id="clearMap" type="button" class="btn btn-outline-secondary btn-sm">Clear</button>
+                        <button id="exportResults" type="button" class="btn btn-outline-success btn-sm">Export CSV</button>
+                    </div>
+                </div>
+                <div id="map" class="map-container" aria-label="Interactive city map"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-body">
+                <h2 class="h4">Results <span id="resultsCount" class="badge bg-secondary ms-2">0 found</span></h2>
+                <div id="loadingStatus" class="alert alert-info py-2" role="status" aria-live="polite" hidden>
+                    <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                    <span id="loadingMessage">Searching for cities...</span>
+                </div>
+                <div id="statsPanel" class="row g-2 mb-3">
+                    <div class="col-6"><small>Population</small><div id="totalPopulation">-</div></div>
+                    <div class="col-6"><small>Average GDP per capita</small><div id="avgGDP">-</div></div>
+                    <div class="col-6"><small>Countries</small><div id="countriesCount">-</div></div>
+                    <div class="col-6"><small>Query time</small><div id="queryTime">-</div></div>
+                </div>
+                <div id="resultsPanel" class="results-panel" aria-live="polite">
+                    <p class="text-muted">Draw a polygon or rectangle to find cities inside it.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ cities_geojson|json_script:"initial-cities" }}
+{{ map_center_lat|json_script:"map-center-lat" }}
+{{ map_center_lng|json_script:"map-center-lng" }}
+{{ map_zoom|json_script:"map-zoom" }}
+<script src="{% static 'advanced_js_mapping/js/ui-controls.js' %}"></script>
+<script src="{% static 'advanced_js_mapping/js/spatial-analysis.js' %}"></script>
+<script src="{% static 'advanced_js_mapping/js/map-interface.js' %}"></script>
+<script>
+    window.INITIAL_CITIES = JSON.parse(JSON.parse(document.getElementById('initial-cities').textContent));
+    window.MAP_CONFIG = {
+        initialView: [
+            JSON.parse(document.getElementById('map-center-lat').textContent),
+            JSON.parse(document.getElementById('map-center-lng').textContent)
+        ],
+        initialZoom: JSON.parse(document.getElementById('map-zoom').textContent)
+    };
+    UIControls.init();
+    SpatialAnalysis.init();
+    AdvancedMapping.init();
+    document.getElementById('resetView').addEventListener('click', () => AdvancedMapping.resetView());
+    document.getElementById('clearMap').addEventListener('click', () => AdvancedMapping.clearAll());
+    document.getElementById('exportResults').addEventListener('click', () => AdvancedMapping.exportResults());
+</script>
+<script src="{% static 'advanced_js_mapping/js/city-editor.js' %}"></script>
+{% endblock %}
